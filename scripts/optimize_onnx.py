@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-SDXL ONNX Optimization Script (Folder-structure aware)
+SDXL ONNX Optimization Script (Folder-structure aware, stable version)
 
 Supports SDXL's actual ONNX export layout:
 
@@ -17,7 +17,7 @@ Supports SDXL's actual ONNX export layout:
 Performs:
 - ORT transformer optimization (TextEncoder only)
 - Optional INT8 quantization
-- Mobile IR version adjustments
+- Mobile IR version adjustments (UNet is skipped for memory safety)
 - Metadata injection
 - Manifest generation
 - External data format (model.onnx*, including .data / _data) copying
@@ -28,7 +28,6 @@ import json
 from pathlib import Path
 import shutil
 import onnx
-import onnxruntime as ort
 from onnxruntime.transformers import optimizer
 from onnxruntime.quantization import quantize_dynamic, QuantType
 
@@ -37,14 +36,14 @@ from onnxruntime.quantization import quantize_dynamic, QuantType
 # Utility helpers
 # ------------------------------------------------------------
 
-def copy_external_data(src_dir: Path, dst_dir: Path, base_name: str = "model.onnx"):
+def copy_external_data(src_dir: Path, dst_dir: Path, base_name="model.onnx"):
     """Copy model.onnx and all related external data files (model.onnx*)."""
     src_model = src_dir / base_name
     dst_model = dst_dir / base_name
     shutil.copy(src_model, dst_model)
 
     # Copy any external data variants:
-    # model.onnx.data*, model.onnx_data*, etc.
+    # model.onnx.data*, model.onnx_data*, model.onnx_data_00000, etc.
     for data_file in src_dir.glob(f"{base_name}*"):
         if data_file.name == base_name:
             continue
@@ -69,7 +68,7 @@ def optimize_text_encoder(src: Path, dst: Path):
         shutil.copy(src, dst)
 
 
-def quantize_model(src: Path, dst: Path, allow_unet: bool = False):
+def quantize_model(src: Path, dst: Path, allow_unet=False):
     """Apply dynamic quantization."""
     name = src.name.lower()
     if "unet" in name and not allow_unet:
@@ -131,8 +130,7 @@ def get_io_info(model_path: Path) -> dict:
 # Main processing
 # ------------------------------------------------------------
 
-def process_component(name: str, src_dir: Path, dst_dir: Path, quantize: bool = False, quantize_unet: bool = False):
-    """Process one SDXL component folder."""
+def process_component(name: str, src_dir: Path, dst_dir: Path, quantize=False, quantize_unet=False):
     print(f"\n=== Processing {name} ===")
 
     src_model = src_dir / "model.onnx"
@@ -156,11 +154,14 @@ def process_component(name: str, src_dir: Path, dst_dir: Path, quantize: bool = 
     else:
         shutil.copy(tmp_path, out_path)
 
-    # 3) Copy external data FIRST (supports .data* / _data* / any model.onnx*)
+    # 3) Copy external data FIRST
     copy_external_data(src_dir, dst_dir, base_name="model.onnx")
 
-    # 4) Mobile adjustments AFTER external data exists
-    mobile_adjust(out_path)
+    # 4) Mobile adjustments (UNet is skipped to avoid OOM)
+    if "unet" not in name:
+        mobile_adjust(out_path)
+    else:
+        print("  Skipping mobile_adjust for UNet (too large for onnx.load)")
 
     # 5) Metadata
     io_info = get_io_info(out_path)
@@ -171,7 +172,6 @@ def process_component(name: str, src_dir: Path, dst_dir: Path, quantize: bool = 
         "io_info": io_info,
     })
 
-    # Cleanup
     if tmp_path.exists():
         tmp_path.unlink()
 
@@ -214,7 +214,6 @@ def main():
                 "io_info": get_io_info(out),
             }
 
-    # Copy tokenizer/scheduler
     for folder in ("tokenizer", "tokenizer_2", "scheduler"):
         s = input_dir / folder
         d = output_dir / folder
@@ -224,7 +223,6 @@ def main():
             shutil.copytree(s, d)
             print(f"Copied {folder}")
 
-    # Save manifest
     with open(output_dir / "manifest.json", "w") as f:
         json.dump(manifest, f, indent=2)
 
