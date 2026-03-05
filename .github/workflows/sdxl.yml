@@ -42,7 +42,6 @@ jobs:
     - name: Install dependencies
       run: |
         pip install --upgrade pip
-        
         pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
         pip install diffusers transformers accelerate safetensors hf_transfer
         pip install onnx onnxruntime onnxsim onnxconverter-common
@@ -101,7 +100,6 @@ jobs:
         python scripts/optimize_onnx.py \
           --input-dir ${{ env.ONNX_DIR }} \
           --output-dir ${{ env.ONNX_OPTIMIZED_DIR }} \
-          --mobile \
           ${{ inputs.quantize && '--quantize' || '' }}
 
     - name: Upload optimized ONNX models
