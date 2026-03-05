@@ -1,0 +1,29 @@
+# SDXL ONNX Export & Inference Requirements
+
+# PyTorch (CPU version for CI)
+torch>=2.0.0
+torchvision>=0.15.0
+
+# Diffusers for SDXL model loading
+diffusers>=0.25.0
+transformers>=4.36.0
+accelerate>=0.25.0
+safetensors>=0.4.0
+
+# ONNX tools
+onnx>=1.15.0
+onnxsim>=0.4.35
+onnxruntime>=1.17.0
+onnxruntime-tools>=1.7.0
+onnxconverter-common>=1.14.0
+onnxscript>=0.1.0
+
+# HuggingFace fast download
+hf_transfer>=0.1.4
+
+# Image processing
+Pillow>=10.0.0
+numpy>=1.24.0
+
+# For local testing
+tqdm>=4.65.0
