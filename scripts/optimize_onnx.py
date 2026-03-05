@@ -2,7 +2,7 @@
 """
 SDXL ONNX Optimization Script (Folder-structure aware)
 
-This version is fully rewritten to support SDXL's actual ONNX export layout:
+Supports SDXL's actual ONNX export layout:
 
   unet/model.onnx
   text_encoder/model.onnx
@@ -14,7 +14,7 @@ This version is fully rewritten to support SDXL's actual ONNX export layout:
   scheduler/
   model_index.json
 
-It performs:
+Performs:
 - ORT transformer optimization (TextEncoder only)
 - Optional INT8 quantization
 - Mobile IR version adjustments
@@ -152,12 +152,12 @@ def process_component(name: str, src_dir: Path, dst_dir: Path, quantize=False, q
     else:
         shutil.copy(tmp_path, out_path)
 
-    # 3) Mobile adjustments
-    mobile_adjust(out_path)
-
-    # 4) Copy external data
+    # 3) Copy external data FIRST (critical fix)
     for data_file in src_dir.glob("model.onnx.data*"):
         shutil.copy(data_file, dst_dir / data_file.name)
+
+    # 4) Mobile adjustments AFTER external data exists
+    mobile_adjust(out_path)
 
     # 5) Metadata
     io_info = get_io_info(out_path)
