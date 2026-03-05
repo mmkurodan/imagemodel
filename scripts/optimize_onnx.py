@@ -36,7 +36,7 @@ from onnxruntime.quantization import quantize_dynamic, QuantType
 # Utility helpers
 # ------------------------------------------------------------
 
-def copy_external_data(src_dir: Path, dst_dir: Path, base_name="model.onnx"):
+def copy_external_data(src_dir: Path, dst_dir: Path, base_name: str = "model.onnx"):
     """Copy model.onnx and all related external data files (model.onnx*)."""
     src_model = src_dir / base_name
     dst_model = dst_dir / base_name
@@ -68,7 +68,7 @@ def optimize_text_encoder(src: Path, dst: Path):
         shutil.copy(src, dst)
 
 
-def quantize_model(src: Path, dst: Path, allow_unet=False):
+def quantize_model(src: Path, dst: Path, allow_unet: bool = False):
     """Apply dynamic quantization."""
     name = src.name.lower()
     if "unet" in name and not allow_unet:
@@ -130,7 +130,7 @@ def get_io_info(model_path: Path) -> dict:
 # Main processing
 # ------------------------------------------------------------
 
-def process_component(name: str, src_dir: Path, dst_dir: Path, quantize=False, quantize_unet=False):
+def process_component(name: str, src_dir: Path, dst_dir: Path, quantize: bool = False, quantize_unet: bool = False):
     print(f"\n=== Processing {name} ===")
 
     src_model = src_dir / "model.onnx"
