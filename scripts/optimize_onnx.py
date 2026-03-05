@@ -20,7 +20,7 @@ Performs:
 - Mobile IR version adjustments
 - Metadata injection
 - Manifest generation
-- External data format (.onnx.data*) copying
+- External data format (model.onnx*, including .data / _data) copying
 """
 
 import argparse
@@ -37,13 +37,17 @@ from onnxruntime.quantization import quantize_dynamic, QuantType
 # Utility helpers
 # ------------------------------------------------------------
 
-def copy_external_data(src_dir: Path, dst_dir: Path, base_name="model.onnx"):
-    """Copy model.onnx and all model.onnx.data* files."""
+def copy_external_data(src_dir: Path, dst_dir: Path, base_name: str = "model.onnx"):
+    """Copy model.onnx and all related external data files (model.onnx*)."""
     src_model = src_dir / base_name
     dst_model = dst_dir / base_name
     shutil.copy(src_model, dst_model)
 
-    for data_file in src_dir.glob(f"{base_name}.data*"):
+    # Copy any external data variants:
+    # model.onnx.data*, model.onnx_data*, etc.
+    for data_file in src_dir.glob(f"{base_name}*"):
+        if data_file.name == base_name:
+            continue
         shutil.copy(data_file, dst_dir / data_file.name)
 
 
@@ -65,7 +69,7 @@ def optimize_text_encoder(src: Path, dst: Path):
         shutil.copy(src, dst)
 
 
-def quantize_model(src: Path, dst: Path, allow_unet=False):
+def quantize_model(src: Path, dst: Path, allow_unet: bool = False):
     """Apply dynamic quantization."""
     name = src.name.lower()
     if "unet" in name and not allow_unet:
@@ -127,7 +131,7 @@ def get_io_info(model_path: Path) -> dict:
 # Main processing
 # ------------------------------------------------------------
 
-def process_component(name: str, src_dir: Path, dst_dir: Path, quantize=False, quantize_unet=False):
+def process_component(name: str, src_dir: Path, dst_dir: Path, quantize: bool = False, quantize_unet: bool = False):
     """Process one SDXL component folder."""
     print(f"\n=== Processing {name} ===")
 
@@ -152,9 +156,8 @@ def process_component(name: str, src_dir: Path, dst_dir: Path, quantize=False, q
     else:
         shutil.copy(tmp_path, out_path)
 
-    # 3) Copy external data FIRST (critical fix)
-    for data_file in src_dir.glob("model.onnx.data*"):
-        shutil.copy(data_file, dst_dir / data_file.name)
+    # 3) Copy external data FIRST (supports .data* / _data* / any model.onnx*)
+    copy_external_data(src_dir, dst_dir, base_name="model.onnx")
 
     # 4) Mobile adjustments AFTER external data exists
     mobile_adjust(out_path)
