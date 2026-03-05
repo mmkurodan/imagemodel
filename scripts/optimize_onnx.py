@@ -1,26 +1,6 @@
 #!/usr/bin/env python3
 """
 SDXL ONNX Optimization Script (Folder-structure aware, stable version)
-
-Supports SDXL's actual ONNX export layout:
-
-  unet/model.onnx
-  text_encoder/model.onnx
-  text_encoder_2/model.onnx
-  vae_decoder/model.onnx
-  vae_encoder/model.onnx
-  tokenizer/
-  tokenizer_2/
-  scheduler/
-  model_index.json
-
-Performs:
-- ORT transformer optimization (TextEncoder only)
-- Optional INT8 quantization
-- Mobile IR version adjustments (UNet is skipped for memory safety)
-- Metadata injection
-- Manifest generation
-- External data format (model.onnx*, including .data / _data) copying
 """
 
 import argparse
@@ -37,11 +17,7 @@ from onnxruntime.quantization import quantize_dynamic, QuantType
 # ------------------------------------------------------------
 
 def copy_external_data(src_dir: Path, dst_dir: Path, base_name: str = "model.onnx"):
-    """Copy model.onnx and all related external data files (model.onnx*)."""
-    src_model = src_dir / base_name
-    dst_model = dst_dir / base_name
-    shutil.copy(src_model, dst_model)
-
+    """Copy only external data files related to model.onnx (do NOT overwrite model.onnx)."""
     # Copy any external data variants:
     # model.onnx.data*, model.onnx_data*, model.onnx_data_00000, etc.
     for data_file in src_dir.glob(f"{base_name}*"):
@@ -51,7 +27,6 @@ def copy_external_data(src_dir: Path, dst_dir: Path, base_name: str = "model.onn
 
 
 def optimize_text_encoder(src: Path, dst: Path):
-    """Apply ORT transformer optimizer to text encoder."""
     print(f"Optimizing TextEncoder: {src}")
     try:
         opt_model = optimizer.optimize_model(
@@ -69,7 +44,6 @@ def optimize_text_encoder(src: Path, dst: Path):
 
 
 def quantize_model(src: Path, dst: Path, allow_unet: bool = False):
-    """Apply dynamic quantization."""
     name = src.name.lower()
     if "unet" in name and not allow_unet:
         print("  Skipping UNet quantization")
@@ -91,7 +65,6 @@ def quantize_model(src: Path, dst: Path, allow_unet: bool = False):
 
 
 def mobile_adjust(model_path: Path):
-    """Lower IR version for mobile compatibility."""
     model = onnx.load(str(model_path))
     if getattr(model, "ir_version", 0) > 8:
         print(f"  Lowering IR version {model.ir_version} -> 8")
@@ -154,7 +127,7 @@ def process_component(name: str, src_dir: Path, dst_dir: Path, quantize: bool = 
     else:
         shutil.copy(tmp_path, out_path)
 
-    # 3) Copy external data FIRST
+    # 3) Copy external data FIRST (but do not overwrite model.onnx)
     copy_external_data(src_dir, dst_dir, base_name="model.onnx")
 
     # 4) Mobile adjustments (UNet is skipped to avoid OOM)
@@ -163,14 +136,22 @@ def process_component(name: str, src_dir: Path, dst_dir: Path, quantize: bool = 
     else:
         print("  Skipping mobile_adjust for UNet (too large for onnx.load)")
 
-    # 5) Metadata
-    io_info = get_io_info(out_path)
-    add_metadata(out_path, {
-        "component": name,
-        "optimized": True,
-        "quantized": quantize,
-        "io_info": io_info,
-    })
+    # 5) Metadata（UNet は巨大なので IO 解析もスキップ推奨）
+    if "unet" not in name:
+        io_info = get_io_info(out_path)
+        add_metadata(out_path, {
+            "component": name,
+            "optimized": True,
+            "quantized": quantize,
+            "io_info": io_info,
+        })
+    else:
+        add_metadata(out_path, {
+            "component": name,
+            "optimized": True,
+            "quantized": quantize,
+            "io_info": "skipped_for_unet_due_to_size",
+        })
 
     if tmp_path.exists():
         tmp_path.unlink()
@@ -209,9 +190,15 @@ def main():
             quantize_unet=args.quantize_unet,
         )
         if out:
+            # UNet の IO 情報もここではスキップしておく
+            if "unet" not in name:
+                io_info = get_io_info(out)
+            else:
+                io_info = "skipped_for_unet_due_to_size"
+
             manifest["models"][name] = {
                 "size_mb": round(out.stat().st_size / (1024 * 1024), 2),
-                "io_info": get_io_info(out),
+                "io_info": io_info,
             }
 
     for folder in ("tokenizer", "tokenizer_2", "scheduler"):
