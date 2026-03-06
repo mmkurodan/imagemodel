@@ -29,16 +29,16 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ !inputs.skip_export }}
     timeout-minutes: 180
-    
+
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.11'
         cache: 'pip'
-    
+
     - name: Install dependencies
       run: |
         pip install --upgrade pip
@@ -46,7 +46,7 @@ jobs:
         pip install diffusers transformers accelerate safetensors hf_transfer
         pip install onnx onnxruntime onnxsim onnxconverter-common
         pip install "optimum[onnxruntime]"
-    
+
     - name: Cache HuggingFace models
       uses: actions/cache@v4
       with:
@@ -54,15 +54,15 @@ jobs:
         key: hf-sdxl-base-${{ hashFiles('scripts/export_sdxl_onnx.py') }}
         restore-keys: |
           hf-sdxl-base-
-    
+
     - name: Export SDXL to ONNX
       run: |
         python scripts/export_sdxl_onnx.py \
           --model-id stabilityai/stable-diffusion-xl-base-1.0 \
-          --output-dir ${{ env.ONNX_DIR }}
+          --output-dir "${{ env.ONNX_DIR }}"
       env:
         HF_TOKEN: ${{ secrets.HF_TOKEN }}
-    
+
     - name: Upload raw ONNX models
       uses: actions/upload-artifact@v4
       with:
@@ -74,7 +74,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: export-onnx
     if: needs.export-onnx.result == 'success'
-    
+    timeout-minutes: 360   # ←★ 追加した Timeout
+
     steps:
     - uses: actions/checkout@v4
 
@@ -97,10 +98,15 @@ jobs:
 
     - name: Optimize ONNX models
       run: |
+        QFLAG=""
+        if [ "${{ inputs.quantize }}" = "true" ]; then
+          QFLAG="--quantize"
+        fi
+
         python scripts/optimize_onnx.py \
-          --input-dir ${{ env.ONNX_DIR }} \
-          --output-dir ${{ env.ONNX_OPTIMIZED_DIR }} \
-          ${{ inputs.quantize && '--quantize' || '' }}
+          --input-dir "${{ env.ONNX_DIR }}" \
+          --output-dir "${{ env.ONNX_OPTIMIZED_DIR }}" \
+          $QFLAG
 
     - name: Upload optimized ONNX models
       uses: actions/upload-artifact@v4
