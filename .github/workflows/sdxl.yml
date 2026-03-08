@@ -1,33 +1,37 @@
-name: SDXL ONNX Build
+name: SDXL ONNX Export
 
 on:
+  workflow_dispatch:
+    inputs:
+      model_id:
+        description: "Hugging Face model ID"
+        required: false
+        type: string
+        default: "stabilityai/stable-diffusion-xl-base-1.0"
+      output_dir:
+        description: "Output directory to upload as artifact"
+        required: false
+        type: string
+        default: "onnx"
   push:
     branches: [ "main" ]
     paths:
-      - 'scripts/**'
-      - '.github/workflows/sdxl.yml'
-  workflow_dispatch:
-    inputs:
-      skip_export:
-        description: 'Skip ONNX export (use cached models)'
-        required: false
-        type: boolean
-        default: false
-      quantize:
-        description: 'Apply INT8 quantization'
-        required: false
-        type: boolean
-        default: false
+      - "scripts/export_sdxl_onnx.py"
+      - "scripts/requirements.txt"
+      - ".github/workflows/sdxl.yml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 
 env:
-  ONNX_DIR: onnx
-  ONNX_OPTIMIZED_DIR: onnx_optimized
+  MODEL_ID: ${{ github.event.inputs.model_id || 'stabilityai/stable-diffusion-xl-base-1.0' }}
+  OUTPUT_DIR: ${{ github.event.inputs.output_dir || 'onnx' }}
   HF_HUB_ENABLE_HF_TRANSFER: 1
 
 jobs:
   export-onnx:
     runs-on: ubuntu-latest
-    if: ${{ !inputs.skip_export }}
     timeout-minutes: 180
 
     steps:
@@ -41,76 +45,20 @@ jobs:
 
     - name: Install dependencies
       run: |
-        pip install --upgrade pip
-        pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
-        pip install diffusers transformers accelerate safetensors hf_transfer
-        pip install onnx onnxruntime onnxsim onnxconverter-common
-        pip install "optimum[onnxruntime]"
-
-    - name: Cache HuggingFace models
-      uses: actions/cache@v4
-      with:
-        path: ~/.cache/huggingface
-        key: hf-sdxl-base-${{ hashFiles('scripts/export_sdxl_onnx.py') }}
-        restore-keys: |
-          hf-sdxl-base-
+        python -m pip install --upgrade pip
+        pip install -r scripts/requirements.txt
 
     - name: Export SDXL to ONNX
       run: |
         python scripts/export_sdxl_onnx.py \
-          --model-id stabilityai/stable-diffusion-xl-base-1.0 \
-          --output-dir "${{ env.ONNX_DIR }}"
+          --model-id "${{ env.MODEL_ID }}" \
+          --output-dir "${{ env.OUTPUT_DIR }}"
       env:
         HF_TOKEN: ${{ secrets.HF_TOKEN }}
 
-    - name: Upload raw ONNX models
+    - name: Upload ONNX artifact
       uses: actions/upload-artifact@v4
       with:
-        name: sdxl-onnx-raw
-        path: ${{ env.ONNX_DIR }}
+        name: sdxl-onnx
+        path: ${{ env.OUTPUT_DIR }}
         retention-days: 7
-
-  optimize-onnx:
-    runs-on: ubuntu-latest
-    needs: export-onnx
-    if: needs.export-onnx.result == 'success'
-    timeout-minutes: 360   # ←★ 追加した Timeout
-
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.11'
-        cache: 'pip'
-
-    - name: Install dependencies
-      run: |
-        pip install --upgrade pip
-        pip install -r scripts/requirements.txt
-
-    - name: Download raw ONNX models
-      uses: actions/download-artifact@v4
-      with:
-        name: sdxl-onnx-raw
-        path: ${{ env.ONNX_DIR }}
-
-    - name: Optimize ONNX models
-      run: |
-        QFLAG=""
-        if [ "${{ inputs.quantize }}" = "true" ]; then
-          QFLAG="--quantize"
-        fi
-
-        python scripts/optimize_onnx.py \
-          --input-dir "${{ env.ONNX_DIR }}" \
-          --output-dir "${{ env.ONNX_OPTIMIZED_DIR }}" \
-          $QFLAG
-
-    - name: Upload optimized ONNX models
-      uses: actions/upload-artifact@v4
-      with:
-        name: sdxl-onnx-optimized
-        path: ${{ env.ONNX_OPTIMIZED_DIR }}
-        retention-days: 30
