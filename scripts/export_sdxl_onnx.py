@@ -17,7 +17,7 @@ from transformers import CLIPTextModel
 
 
 # ============================================================
-# GitHub Actions keep-alive (no-output timeout 防止)
+# GitHub Actions keep-alive
 # ============================================================
 def keep_alive():
     while True:
@@ -26,13 +26,34 @@ def keep_alive():
 
 
 # ============================================================
-# UNet Export (float32)
+# UNet Wrapper（重み fp16 のまま、計算だけ float32）
+# ============================================================
+class UNetWrapper(torch.nn.Module):
+    def __init__(self, unet):
+        super().__init__()
+        self.unet = unet  # fp16 のまま保持
+
+    def forward(self, sample, timestep, encoder_hidden_states):
+        # CPU で Linear を動かすため入力だけ float32 に変換
+        sample = sample.float()
+        timestep = timestep.float()
+        encoder_hidden_states = encoder_hidden_states.float()
+
+        return self.unet(
+            sample,
+            timestep,
+            encoder_hidden_states
+        )
+
+
+# ============================================================
+# UNet Export（fp16 重み + float32 計算）
 # ============================================================
 def export_unet(unet: UNet2DConditionModel, out_dir: Path):
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # CPU export のため float32 に変換
-    unet = unet.to(torch.float32)
+    # Wrapper を適用（重み fp16 のまま）
+    unet = UNetWrapper(unet)
 
     batch = 1
     height = 512
@@ -72,7 +93,7 @@ def export_unet(unet: UNet2DConditionModel, out_dir: Path):
 
 
 # ============================================================
-# Text Encoder Export (float32)
+# Text Encoder Export（float32）
 # ============================================================
 def export_text_encoder(model: CLIPTextModel, out_dir: Path):
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -94,7 +115,7 @@ def export_text_encoder(model: CLIPTextModel, out_dir: Path):
 
 
 # ============================================================
-# VAE Decoder Export (float32)
+# VAE Export（float32）
 # ============================================================
 def export_vae(vae: AutoencoderKL, out_dir: Path):
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -153,7 +174,7 @@ def export_sdxl(model_id: str, output_dir: Path):
 
     pipe = StableDiffusionXLPipeline.from_pretrained(
         model_id,
-        torch_dtype=torch.float16,  # ロードは fp16 で軽量化
+        torch_dtype=torch.float16,  # 重みは fp16 のままロード
         use_safetensors=True,
     )
 
@@ -179,7 +200,6 @@ def export_sdxl(model_id: str, output_dir: Path):
 # Entry Point
 # ============================================================
 def main():
-    # GitHub Actions keep-alive thread
     threading.Thread(target=keep_alive, daemon=True).start()
 
     parser = argparse.ArgumentParser()
