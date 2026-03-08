@@ -20,8 +20,9 @@ on:
       - "scripts/requirements.txt"
       - ".github/workflows/sdxl.yml"
 
+# ★ 修正：run ごとに別グループにする（累積 timeout 防止）
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.run_id }}
   cancel-in-progress: false
 
 env:
@@ -32,7 +33,9 @@ env:
 jobs:
   export-onnx:
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+
+    # ★ 修正：SDXL float32 export は 2〜3 時間かかる
+    timeout-minutes: 360
 
     steps:
     - uses: actions/checkout@v4
@@ -43,7 +46,6 @@ jobs:
         python-version: '3.11'
         cache: 'pip'
 
-    # ★ NumPy 2.x のキャッシュを完全に消す（最重要）
     - name: Clear pip cache
       run: pip cache purge
 
@@ -60,7 +62,6 @@ jobs:
       env:
         HF_TOKEN: ${{ secrets.HF_TOKEN }}
 
-    # ★ ZIP artifact は external data を壊す → tar.gz に変更
     - name: Create tar.gz archive
       run: |
         tar -czf sdxl-onnx.tar.gz "${{ env.OUTPUT_DIR }}"
