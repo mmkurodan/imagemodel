@@ -1,6 +1,9 @@
-# --- PyTorch (必須：2.0 系で固定。これが最重要) ---
+# --- PyTorch (古い ONNX exporter を使うために必須) ---
 torch==2.0.1
 torchvision==0.15.2
+
+# --- NumPy (PyTorch 2.0.1 と ONNXRuntime 1.16.3 の必須条件) ---
+numpy==1.26.4
 
 # --- Diffusers / Transformers (SDXL 読み込み用) ---
 diffusers==0.29.0
@@ -16,5 +19,4 @@ onnxruntime==1.16.3
 huggingface_hub>=0.23.0
 hf_transfer>=0.1.6
 
-# --- optimum は削除（SDXL export を壊すため） ---
-# optimum[onnxruntime]  ← 絶対に入れない
+# --- optimum は SDXL export を壊すため削除 ---
