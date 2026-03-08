@@ -2,7 +2,6 @@
 
 import argparse
 import json
-import os
 from pathlib import Path
 
 import torch
@@ -12,19 +11,22 @@ from diffusers import (
     UNet2DConditionModel,
     AutoencoderKL,
 )
-from transformers import CLIPTextModel, CLIPTokenizer
+from transformers import CLIPTextModel
 
 
 def export_unet(unet: UNet2DConditionModel, out_dir: Path):
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # Dummy inputs (dynamic shape export)
+    # CPU での export 用に float32 に変換
+    unet = unet.to(torch.float32)
+
+    # Dummy inputs (dynamic shape export, float32)
     batch = 1
     height = 512
     width = 512
-    sample = torch.randn(batch, 4, height // 8, width // 8, dtype=torch.float16)
-    timestep = torch.tensor([1.0], dtype=torch.float16)
-    encoder_hidden_states = torch.randn(batch, 77, 2048, dtype=torch.float16)
+    sample = torch.randn(batch, 4, height // 8, width // 8, dtype=torch.float32)
+    timestep = torch.tensor([1.0], dtype=torch.float32)
+    encoder_hidden_states = torch.randn(batch, 77, 2048, dtype=torch.float32)
 
     onnx_path = out_dir / "model.onnx"
 
@@ -58,6 +60,9 @@ def export_unet(unet: UNet2DConditionModel, out_dir: Path):
 def export_text_encoder(model: CLIPTextModel, out_dir: Path):
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    # CPU での export 用に float32 に変換
+    model = model.to(torch.float32)
+
     dummy = torch.randint(0, 10000, (1, 77))
     onnx_path = out_dir / "model.onnx"
 
@@ -74,6 +79,9 @@ def export_text_encoder(model: CLIPTextModel, out_dir: Path):
 
 def export_vae(vae: AutoencoderKL, out_dir: Path):
     out_dir.mkdir(parents=True, exist_ok=True)
+
+    # CPU での export 用に float32 に変換
+    vae = vae.to(torch.float32)
 
     dummy = torch.randn(1, 4, 64, 64)
     onnx_path = out_dir / "model.onnx"
@@ -121,11 +129,11 @@ def export_sdxl(model_id: str, output_dir: Path):
 
     pipe = StableDiffusionXLPipeline.from_pretrained(
         model_id,
-        torch_dtype=torch.float16,
+        torch_dtype=torch.float16,  # ロードは fp16 で OK（メモリ節約）
         use_safetensors=True,
     )
 
-    # Export components
+    # Export components (各 export 内で float32 に変換)
     export_unet(pipe.unet, output_dir / "unet")
     export_text_encoder(pipe.text_encoder, output_dir / "text_encoder")
     export_text_encoder(pipe.text_encoder_2, output_dir / "text_encoder_2")
@@ -148,8 +156,16 @@ def export_sdxl(model_id: str, output_dir: Path):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model-id", type=str, default="stabilityai/stable-diffusion-xl-base-1.0")
-    parser.add_argument("--output-dir", type=Path, default=Path("sdxl-onnx"))
+    parser.add_argument(
+        "--model-id",
+        type=str,
+        default="stabilityai/stable-diffusion-xl-base-1.0",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path("sdxl-onnx"),
+    )
     args = parser.parse_args()
 
     export_sdxl(args.model_id, args.output_dir)
