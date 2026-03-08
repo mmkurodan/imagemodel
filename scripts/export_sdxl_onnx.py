@@ -2,6 +2,8 @@
 
 import argparse
 import json
+import threading
+import time
 from pathlib import Path
 
 import torch
@@ -14,16 +16,28 @@ from diffusers import (
 from transformers import CLIPTextModel
 
 
+# ============================================================
+# GitHub Actions keep-alive (no-output timeout 防止)
+# ============================================================
+def keep_alive():
+    while True:
+        print("Export running... (keep-alive)")
+        time.sleep(60)
+
+
+# ============================================================
+# UNet Export (float32)
+# ============================================================
 def export_unet(unet: UNet2DConditionModel, out_dir: Path):
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # CPU での export 用に float32 に変換
+    # CPU export のため float32 に変換
     unet = unet.to(torch.float32)
 
-    # Dummy inputs (dynamic shape export, float32)
     batch = 1
     height = 512
     width = 512
+
     sample = torch.randn(batch, 4, height // 8, width // 8, dtype=torch.float32)
     timestep = torch.tensor([1.0], dtype=torch.float32)
     encoder_hidden_states = torch.randn(batch, 77, 2048, dtype=torch.float32)
@@ -57,10 +71,12 @@ def export_unet(unet: UNet2DConditionModel, out_dir: Path):
     )
 
 
+# ============================================================
+# Text Encoder Export (float32)
+# ============================================================
 def export_text_encoder(model: CLIPTextModel, out_dir: Path):
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # CPU での export 用に float32 に変換
     model = model.to(torch.float32)
 
     dummy = torch.randint(0, 10000, (1, 77))
@@ -77,10 +93,12 @@ def export_text_encoder(model: CLIPTextModel, out_dir: Path):
     )
 
 
+# ============================================================
+# VAE Decoder Export (float32)
+# ============================================================
 def export_vae(vae: AutoencoderKL, out_dir: Path):
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # CPU での export 用に float32 に変換
     vae = vae.to(torch.float32)
 
     dummy = torch.randn(1, 4, 64, 64)
@@ -97,6 +115,9 @@ def export_vae(vae: AutoencoderKL, out_dir: Path):
     )
 
 
+# ============================================================
+# Utility
+# ============================================================
 def copy_json(src_dir: Path, dst_dir: Path, names):
     dst_dir.mkdir(parents=True, exist_ok=True)
     for name in names:
@@ -124,27 +145,27 @@ def write_manifest(out_dir: Path, model_id: str):
         json.dump(manifest, f, indent=2)
 
 
+# ============================================================
+# Main Export
+# ============================================================
 def export_sdxl(model_id: str, output_dir: Path):
     print(f"Loading SDXL base: {model_id}")
 
     pipe = StableDiffusionXLPipeline.from_pretrained(
         model_id,
-        torch_dtype=torch.float16,  # ロードは fp16 で OK（メモリ節約）
+        torch_dtype=torch.float16,  # ロードは fp16 で軽量化
         use_safetensors=True,
     )
 
-    # Export components (各 export 内で float32 に変換)
     export_unet(pipe.unet, output_dir / "unet")
     export_text_encoder(pipe.text_encoder, output_dir / "text_encoder")
     export_text_encoder(pipe.text_encoder_2, output_dir / "text_encoder_2")
     export_vae(pipe.vae, output_dir / "vae_decoder")
 
-    # Copy tokenizer / scheduler
     copy_json(pipe.tokenizer, output_dir / "tokenizer", ["vocab.json", "merges.txt"])
     copy_json(pipe.tokenizer_2, output_dir / "tokenizer_2", ["vocab.json", "merges.txt"])
     copy_json(pipe.scheduler, output_dir / "scheduler", ["scheduler_config.json"])
 
-    # model_index.json
     (output_dir / "model_index.json").write_text(
         json.dumps(pipe.config, indent=2)
     )
@@ -154,18 +175,16 @@ def export_sdxl(model_id: str, output_dir: Path):
     print(f"Export completed: {output_dir}")
 
 
+# ============================================================
+# Entry Point
+# ============================================================
 def main():
+    # GitHub Actions keep-alive thread
+    threading.Thread(target=keep_alive, daemon=True).start()
+
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--model-id",
-        type=str,
-        default="stabilityai/stable-diffusion-xl-base-1.0",
-    )
-    parser.add_argument(
-        "--output-dir",
-        type=Path,
-        default=Path("sdxl-onnx"),
-    )
+    parser.add_argument("--model-id", type=str, default="stabilityai/stable-diffusion-xl-base-1.0")
+    parser.add_argument("--output-dir", type=Path, default=Path("sdxl-onnx"))
     args = parser.parse_args()
 
     export_sdxl(args.model_id, args.output_dir)
