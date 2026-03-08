@@ -1,12 +1,20 @@
-# SDXL -> ONNX export dependencies
-torch>=2.2.0
-torchvision>=0.17.0
-diffusers>=0.29.0
-transformers>=4.41.0
-accelerate>=0.30.0
-safetensors>=0.4.3
-optimum[onnxruntime]>=1.20.0
-onnx>=1.16.0
-onnxruntime>=1.18.0
+# --- PyTorch (必須：2.0 系で固定。これが最重要) ---
+torch==2.0.1
+torchvision==0.15.2
+
+# --- Diffusers / Transformers (SDXL 読み込み用) ---
+diffusers==0.29.0
+transformers==4.41.0
+accelerate==0.30.0
+safetensors==0.4.3
+
+# --- ONNX Export (安定版) ---
+onnx==1.14.1
+onnxruntime==1.16.3
+
+# --- Hugging Face Hub ---
 huggingface_hub>=0.23.0
 hf_transfer>=0.1.6
+
+# --- optimum は削除（SDXL export を壊すため） ---
+# optimum[onnxruntime]  ← 絶対に入れない

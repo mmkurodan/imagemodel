@@ -56,9 +56,15 @@ jobs:
       env:
         HF_TOKEN: ${{ secrets.HF_TOKEN }}
 
-    - name: Upload ONNX artifact
+    # ★ 追加：tar.gz を作成
+    - name: Create tar.gz archive
+      run: |
+        tar -czf sdxl-onnx.tar.gz "${{ env.OUTPUT_DIR }}"
+
+    # ★ 修正：ZIP ではなく tar.gz をアップロード
+    - name: Upload ONNX artifact (tar.gz)
       uses: actions/upload-artifact@v4
       with:
         name: sdxl-onnx
-        path: ${{ env.OUTPUT_DIR }}
+        path: sdxl-onnx.tar.gz
         retention-days: 7
