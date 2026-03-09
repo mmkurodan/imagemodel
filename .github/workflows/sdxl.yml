@@ -20,7 +20,7 @@ on:
       - "scripts/requirements.txt"
       - ".github/workflows/sdxl.yml"
 
-# ★ 修正：run ごとに別グループにする（累積 timeout 防止）
+# ★ ここは必ずトップレベル（on: の外、jobs: の外）
 concurrency:
   group: ${{ github.run_id }}
   cancel-in-progress: false
@@ -34,7 +34,7 @@ jobs:
   export-onnx:
     runs-on: ubuntu-latest
 
-    # ★ 修正：SDXL float32 export は 2〜3 時間かかる
+    # ★ SDXL export は 2〜3 時間かかる
     timeout-minutes: 360
 
     steps:
