@@ -26,15 +26,22 @@ def keep_alive():
 
 
 # ============================================================
-# UNet Wrapper（重み fp16 のまま、計算だけ float32）
+# UNet Wrapper（Linear の重みだけ float32 に変換）
 # ============================================================
 class UNetWrapper(torch.nn.Module):
     def __init__(self, unet):
         super().__init__()
-        self.unet = unet  # fp16 のまま保持
+        self.unet = unet  # 重みは fp16 のままロードされている
+
+        # Linear の weight/bias だけ float32 に変換（CPU Linear 対応）
+        for module in self.unet.modules():
+            if isinstance(module, torch.nn.Linear):
+                module.weight.data = module.weight.data.float()
+                if module.bias is not None:
+                    module.bias.data = module.bias.data.float()
 
     def forward(self, sample, timestep, encoder_hidden_states):
-        # CPU で Linear を動かすため入力だけ float32 に変換
+        # 入力は float32 に揃える
         sample = sample.float()
         timestep = timestep.float()
         encoder_hidden_states = encoder_hidden_states.float()
@@ -47,12 +54,12 @@ class UNetWrapper(torch.nn.Module):
 
 
 # ============================================================
-# UNet Export（fp16 重み + float32 計算）
+# UNet Export（fp16 重み + float32 Linear）
 # ============================================================
 def export_unet(unet: UNet2DConditionModel, out_dir: Path):
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # Wrapper を適用（重み fp16 のまま）
+    # Wrapper を適用
     unet = UNetWrapper(unet)
 
     batch = 1
