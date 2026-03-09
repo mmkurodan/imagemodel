@@ -22,17 +22,18 @@ def keep_alive():
 
 
 # ============================================================
-# UNet Wrapper（Linear を float32 に揃える）
+# UNet Wrapper（Linear + Conv2d を float32 に揃える）
 # ============================================================
 class UNetWrapper(torch.nn.Module):
     def __init__(self, unet):
         super().__init__()
         self.unet = unet
 
-        # Linear の weight/bias を float32 に変換
+        # Linear と Conv2d の weight/bias を float32 に変換
         for module in self.unet.modules():
-            if isinstance(module, torch.nn.Linear):
-                module.weight.data = module.weight.data.float()
+            if isinstance(module, (torch.nn.Linear, torch.nn.Conv2d)):
+                if module.weight is not None:
+                    module.weight.data = module.weight.data.float()
                 if module.bias is not None:
                     module.bias.data = module.bias.data.float()
 
@@ -44,12 +45,12 @@ class UNetWrapper(torch.nn.Module):
 
 
 # ============================================================
-# UNet Export（Linear を float32 に変換した UNetWrapper を使用）
+# UNet Export（Linear + Conv2d を float32 化した UNetWrapper を使用）
 # ============================================================
 def export_unet(unet: UNet2DConditionModel, out_dir: Path):
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # ★ SD1.5 でも Linear の dtype 問題があるため必須
+    # ★ SD1.5 でも dtype mismatch を防ぐため必須
     unet = UNetWrapper(unet)
 
     batch = 1
