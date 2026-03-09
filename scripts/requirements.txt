@@ -6,7 +6,7 @@ torchvision==0.15.2
 numpy==1.26.4
 
 # --- Diffusers / Transformers (SD1.5 用) ---
-diffusers==0.24.0
+diffusers==0.19.3
 transformers==4.30.2
 accelerate==0.21.0
 safetensors==0.3.3
