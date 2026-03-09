@@ -1,4 +1,4 @@
-name: SDXL ONNX Export
+name: SD15 ONNX Export
 
 on:
   workflow_dispatch:
@@ -7,26 +7,26 @@ on:
         description: "Hugging Face model ID"
         required: false
         type: string
-        default: "stabilityai/stable-diffusion-xl-base-1.0"
+        default: "runwayml/stable-diffusion-v1-5"
       output_dir:
         description: "Output directory to upload as artifact"
         required: false
         type: string
-        default: "sdxl-onnx"
+        default: "sd15-base"
   push:
     branches: [ "main" ]
     paths:
-      - "scripts/export_sdxl_onnx.py"
+      - "scripts/export_sd15_onnx.py"
       - "scripts/requirements.txt"
-      - ".github/workflows/sdxl.yml"
+      - ".github/workflows/sd15.yml"
 
 concurrency:
   group: ${{ github.run_id }}
   cancel-in-progress: false
 
 env:
-  MODEL_ID: ${{ inputs.model_id != '' && inputs.model_id || 'stabilityai/stable-diffusion-xl-base-1.0' }}
-  OUTPUT_DIR: ${{ inputs.output_dir != '' && inputs.output_dir || 'sdxl-onnx' }}
+  MODEL_ID: ${{ inputs.model_id != '' && inputs.model_id || 'runwayml/stable-diffusion-v1-5' }}
+  OUTPUT_DIR: ${{ inputs.output_dir != '' && inputs.output_dir || 'sd15-base' }}
   HF_HUB_ENABLE_HF_TRANSFER: 1
 
 jobs:
@@ -51,9 +51,9 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r scripts/requirements.txt
 
-    - name: Export SDXL to ONNX
+    - name: Export SD15 to ONNX
       run: |
-        python scripts/export_sdxl_onnx.py \
+        python scripts/export_sd15_onnx.py \
           --model-id "${{ env.MODEL_ID }}" \
           --output-dir "${{ env.OUTPUT_DIR }}"
       env:
@@ -61,11 +61,11 @@ jobs:
 
     - name: Create tar.gz archive
       run: |
-        tar -czf sdxl-onnx.tar.gz "${{ env.OUTPUT_DIR }}"
+        tar -czf sd15-base.tar.gz "${{ env.OUTPUT_DIR }}"
 
     - name: Upload ONNX artifact (tar.gz)
       uses: actions/upload-artifact@v4
       with:
-        name: sdxl-onnx
-        path: sdxl-onnx.tar.gz
+        name: sd15-base
+        path: sd15-base.tar.gz
         retention-days: 7
