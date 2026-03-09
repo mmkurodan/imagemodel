@@ -119,13 +119,24 @@ def export_text_encoder(model: CLIPTextModel, out_dir: Path):
 def export_vae(vae: AutoencoderKL, out_dir: Path):
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    vae = vae.to(torch.float32)
+    # Export VAE decoder explicitly (AutoencoderKL.forward performs encoding by default)
+    class VaeDecoderWrapper(torch.nn.Module):
+        def __init__(self, vae_module):
+            super().__init__()
+            self.vae = vae_module
+            self.vae.to(torch.float32)
 
-    dummy = torch.randn(1, 4, 64, 64)
+        def forward(self, latent_sample):
+            # decode returns image tensor [batch, 3, H, W]
+            return self.vae.decode(latent_sample)
+
+    wrapper = VaeDecoderWrapper(vae).to(torch.float32)
+
+    dummy = torch.randn(1, 4, 64, 64, dtype=torch.float32)
     onnx_path = out_dir / "model.onnx"
 
     torch.onnx.export(
-        vae,
+        wrapper,
         dummy,
         str(onnx_path),
         opset_version=17,
