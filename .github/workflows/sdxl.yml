@@ -20,21 +20,18 @@ on:
       - "scripts/requirements.txt"
       - ".github/workflows/sdxl.yml"
 
-# ★ ここは必ずトップレベル（on: の外、jobs: の外）
 concurrency:
   group: ${{ github.run_id }}
   cancel-in-progress: false
 
 env:
-  MODEL_ID: ${{ github.event.inputs.model_id || 'stabilityai/stable-diffusion-xl-base-1.0' }}
-  OUTPUT_DIR: ${{ github.event.inputs.output_dir || 'sdxl-onnx' }}
+  MODEL_ID: ${{ inputs.model_id != '' && inputs.model_id || 'stabilityai/stable-diffusion-xl-base-1.0' }}
+  OUTPUT_DIR: ${{ inputs.output_dir != '' && inputs.output_dir || 'sdxl-onnx' }}
   HF_HUB_ENABLE_HF_TRANSFER: 1
 
 jobs:
   export-onnx:
     runs-on: ubuntu-latest
-
-    # ★ SDXL export は 2〜3 時間かかる
     timeout-minutes: 360
 
     steps:
