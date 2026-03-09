@@ -170,7 +170,7 @@ def export_sd15(model_id: str, output_dir: Path):
 
     pipe = StableDiffusionPipeline.from_pretrained(
         model_id,
-        torch_dtype=torch.float16,
+        torch_dtype=torch.float32,
         use_safetensors=True,
     )
 
@@ -178,8 +178,8 @@ def export_sd15(model_id: str, output_dir: Path):
     export_text_encoder(pipe.text_encoder, output_dir / "text_encoder")
     export_vae(pipe.vae, output_dir / "vae_decoder")
 
-    copy_json(pipe.tokenizer, output_dir / "tokenizer", ["vocab.json", "merges.txt"])
-    copy_json(pipe.scheduler, output_dir / "scheduler", ["scheduler_config.json"])
+    pipe.tokenizer.save_pretrained(output_dir / "tokenizer")
+    pipe.scheduler.save_pretrained(output_dir / "scheduler")
 
     (output_dir / "model_index.json").write_text(
         json.dumps(pipe.config, indent=2)
