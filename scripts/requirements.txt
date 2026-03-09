@@ -2,11 +2,11 @@
 torch==2.0.1
 torchvision==0.15.2
 
-# --- NumPy (PyTorch 2.0.1 と ONNXRuntime 1.16.3 の必須条件) ---
+# --- NumPy ---
 numpy==1.26.4
 
-# --- Diffusers / Transformers (SD1.5 読み込み用) ---
-diffusers==0.20.2
+# --- Diffusers / Transformers (SD1.5 用) ---
+diffusers==0.24.0
 transformers==4.30.2
 accelerate==0.21.0
 safetensors==0.3.3
@@ -15,6 +15,6 @@ safetensors==0.3.3
 onnx==1.14.1
 onnxruntime==1.16.3
 
-# --- Hugging Face Hub ---
-huggingface_hub>=0.23.0
+# --- Hugging Face Hub（cached_download が残っている最後の安定版） ---
+huggingface_hub==0.16.4
 hf_transfer>=0.1.6
