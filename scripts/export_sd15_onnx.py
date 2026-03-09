@@ -9,6 +9,7 @@ from pathlib import Path
 import torch
 import onnx
 from diffusers import StableDiffusionPipeline, UNet2DConditionModel, AutoencoderKL
+from diffusers.models.attention_processor import AttnProcessor
 from transformers import CLIPTextModel
 
 
@@ -173,6 +174,7 @@ def export_sd15(model_id: str, output_dir: Path):
         torch_dtype=torch.float32,
         use_safetensors=True,
     )
+    pipe.unet.set_attn_processor(AttnProcessor())
 
     export_unet(pipe.unet, output_dir / "unet")
     export_text_encoder(pipe.text_encoder, output_dir / "text_encoder")
