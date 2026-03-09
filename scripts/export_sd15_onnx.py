@@ -22,10 +22,35 @@ def keep_alive():
 
 
 # ============================================================
-# UNet Export（fp16 のままで OK）
+# UNet Wrapper（Linear を float32 に揃える）
+# ============================================================
+class UNetWrapper(torch.nn.Module):
+    def __init__(self, unet):
+        super().__init__()
+        self.unet = unet
+
+        # Linear の weight/bias を float32 に変換
+        for module in self.unet.modules():
+            if isinstance(module, torch.nn.Linear):
+                module.weight.data = module.weight.data.float()
+                if module.bias is not None:
+                    module.bias.data = module.bias.data.float()
+
+    def forward(self, sample, timestep, encoder_hidden_states):
+        sample = sample.float()
+        timestep = timestep.float()
+        encoder_hidden_states = encoder_hidden_states.float()
+        return self.unet(sample, timestep, encoder_hidden_states)
+
+
+# ============================================================
+# UNet Export（Linear を float32 に変換した UNetWrapper を使用）
 # ============================================================
 def export_unet(unet: UNet2DConditionModel, out_dir: Path):
     out_dir.mkdir(parents=True, exist_ok=True)
+
+    # ★ SD1.5 でも Linear の dtype 問題があるため必須
+    unet = UNetWrapper(unet)
 
     batch = 1
     height = 512
