@@ -12,6 +12,29 @@ from diffusers import StableDiffusionPipeline, UNet2DConditionModel, Autoencoder
 from diffusers.models.attention_processor import AttnProcessor
 from transformers import CLIPTextModel
 
+# Workaround: replace scaled_dot_product_attention with a Python fallback for ONNX export
+# This prevents the exporter from emitting aten::scaled_dot_product_attention (unsupported in opset 17).
+try:
+    import torch.nn.functional as F
+    if hasattr(F, "scaled_dot_product_attention"):
+        def _scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=0.0, is_causal=False):
+            # Compute attention with matmul/softmax so exporter emits supported ops
+            scores = torch.matmul(q, k.transpose(-2, -1)) / (q.size(-1) ** 0.5)
+            if attn_mask is not None:
+                scores = scores + attn_mask
+            if is_causal:
+                seq_len = scores.size(-1)
+                causal_mask = torch.triu(torch.full((seq_len, seq_len), float("-inf"), dtype=scores.dtype, device=scores.device), diagonal=1)
+                scores = scores + causal_mask
+            attn = torch.softmax(scores, dim=-1)
+            if dropout_p and dropout_p > 0.0:
+                attn = torch.nn.functional.dropout(attn, p=dropout_p, training=False)
+            return torch.matmul(attn, v)
+        F.scaled_dot_product_attention = _scaled_dot_product_attention
+        print("Patched torch.nn.functional.scaled_dot_product_attention for ONNX export")
+except Exception as e:
+    print(f"scaled_dot_product_attention patch skipped: {e}")
+
 
 # ============================================================
 # GitHub Actions keep-alive
